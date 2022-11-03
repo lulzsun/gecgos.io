@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,7 +19,17 @@ import (
 )
 
 var api *webrtc.API
-var connections = make(map[string]*webrtc.PeerConnection)
+var connections = make(map[string]*Client)
+
+type Client struct {
+	peerConnection       *webrtc.PeerConnection
+	additionalCandidates []webrtc.ICECandidateInit
+}
+
+func (c *Client) AddCandidate(can webrtc.ICECandidateInit) []webrtc.ICECandidateInit {
+	c.additionalCandidates = append(c.additionalCandidates, can)
+	return c.additionalCandidates
+}
 
 type Server struct {
 	Ordered bool
@@ -61,9 +72,9 @@ func (s *Server) Listen(port int) error {
 		} else if strings.Split(page, "/")[5] == "remote-description" {
 			setRemoteDescription(w, r)
 		} else if strings.Split(page, "/")[5] == "additional-candidates" {
-			fmt.Println(page)
-			w.WriteHeader(http.StatusNotFound)
+			sendAdditionalCandidates(w, r)
 		} else {
+			fmt.Println(page)
 			w.WriteHeader(http.StatusNotFound)
 		}
 	})
@@ -87,6 +98,7 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
+	connections[id] = &Client{peerConnection, nil}
 
 	//Setup dataChannel to act like UDP with ordered messages (no retransmits)
 	//with the DataChannelInit struct
@@ -117,7 +129,6 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Set the handler for ICE connection state
-
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
@@ -133,6 +144,24 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 				fmt.Println(err)
 			}
 		}
+	})
+
+	// When Pion gathers a new ICE Candidate send it to the client. This is how
+	// ice trickle is implemented. Everytime we have a new candidate available we send
+	// it as soon as it is ready. We don't wait to emit a Offer/Answer until they are
+	// all available
+	peerConnection.OnICECandidate(func(c *webrtc.ICECandidate) {
+		if c == nil {
+			return
+		}
+
+		// outbound, marshalErr := json.Marshal(c.ToJSON())
+		// if marshalErr != nil {
+		// 	panic(marshalErr)
+		// }
+
+		fmt.Println("New ICE Candidate avaliable for " + id + ": " + c.ToJSON().Candidate)
+		connections[id].AddCandidate(c.ToJSON())
 	})
 
 	// Register ordered channel opening handling
@@ -171,10 +200,8 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 		fmt.Printf("Message from DataChannel '%s': '%s'\n", reliableChannel.Label(), string(msg.Data))
 	})
 
-	connections[id] = peerConnection
-
 	// Create an offer to send to the browser
-	offer, err := connections[id].CreateOffer(nil)
+	offer, err := connections[id].peerConnection.CreateOffer(nil)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -195,7 +222,7 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 	// in a production application you should exchange ICE Candidates via OnICECandidate
 	<-gatherComplete
 
-	fmt.Println(*peerConnection.LocalDescription())
+	//fmt.Println(*peerConnection.LocalDescription())
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -229,7 +256,6 @@ func setRemoteDescription(w http.ResponseWriter, r *http.Request) {
 	//fmt.Println(data["sdp"])
 	//fmt.Println(data["type"])
 	id := strings.Split(r.URL.Path, "/")[4]
-	fmt.Println(id)
 
 	if data["type"] != "answer" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -239,9 +265,30 @@ func setRemoteDescription(w http.ResponseWriter, r *http.Request) {
 	answer := webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: data["sdp"].(string)}
 
 	// Set the remote SessionDescription
-	err = connections[id].SetRemoteDescription(answer)
+	err = connections[id].peerConnection.SetRemoteDescription(answer)
 	if err != nil {
 		fmt.Println(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+}
+
+// This function will send the client additional ice candidates to aid in connection
+// https://github.com/geckosio/geckos.io/blob/6ad2535a8f26d6cce0e7af2c4cf7df311622b567/packages/server/src/httpServer/routes.ts#L68
+func sendAdditionalCandidates(w http.ResponseWriter, r *http.Request) {
+	id := strings.Split(r.URL.Path, "/")[4]
+	match, _ := regexp.MatchString("[0-9a-zA-Z]{20}", id)
+
+	if match == true {
+		json, err := json.Marshal(connections[id].additionalCandidates)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(json)
+		return
+	} else {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
