@@ -11,9 +11,6 @@ import (
 	"strings"
 	"time"
 
-	//"reflect"
-	//"encoding/binary"
-
 	"github.com/pion/webrtc/v3"
 	"github.com/rs/xid"
 )
@@ -117,13 +114,7 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 	udpPls.MaxRetransmits = &retransmits
 
 	// Create a datachannel with label 'UDP' and options udpPls
-	dataChannel, err := peerConnection.CreateDataChannel("UDP", &udpPls)
-	if err != nil {
-		panic(err)
-	}
-
-	//Create a reliable datachannel with label "TCP" for all other communications
-	reliableChannel, err := peerConnection.CreateDataChannel("TCP", nil)
+	dataChannel, err := peerConnection.CreateDataChannel("geckos.io", &udpPls)
 	if err != nil {
 		panic(err)
 	}
@@ -131,18 +122,19 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
-
 		//3 = ICEConnectionStateConnected
 		if connectionState == 3 {
-			fmt.Printf("connected!")
+			fmt.Println(id + " connected!")
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
-			fmt.Println("disconnected!")
+			fmt.Println(id + " disconnected!")
+			delete(connections, id)
 
 			err := peerConnection.Close() //deletes all references to this peerconnection in mem and same for ICE agent (ICE agent releases the "closed" status)
 			if err != nil {               //https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close
 				fmt.Println(err)
 			}
+		} else {
+			fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
 		}
 	})
 
@@ -178,26 +170,11 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 				break
 			}
 		}
-
 	})
 
 	// Register text message handling
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
 		fmt.Printf("Message from DataChannel '%s': '%s'\n", dataChannel.Label(), string(msg.Data))
-	})
-
-	// Register reliable channel opening handling
-	reliableChannel.OnOpen(func() {
-		sendErr := reliableChannel.SendText("hi")
-		if sendErr != nil {
-			panic(err)
-		}
-	})
-
-	// Register message handling (Data all served as a bytes slice []byte)
-	// for user controls
-	reliableChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		fmt.Printf("Message from DataChannel '%s': '%s'\n", reliableChannel.Label(), string(msg.Data))
 	})
 
 	// Create an offer to send to the browser
@@ -207,9 +184,6 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create channel that is blocked until ICE Gathering is complete
-	gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
 	// Sets the LocalDescription, and starts our UDP listeners
 	err = peerConnection.SetLocalDescription(offer)
 	if err != nil {
@@ -217,10 +191,13 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Create channel that is blocked until ICE Gathering is complete
+	//gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
+
 	// Block until ICE Gathering is complete, disabling trickle ICE
 	// we do this because we only can exchange one signaling message
 	// in a production application you should exchange ICE Candidates via OnICECandidate
-	<-gatherComplete
+	//<-gatherComplete
 
 	//fmt.Println(*peerConnection.LocalDescription())
 
@@ -228,8 +205,8 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 
 	json := []byte(`{
+		"userData": {},
 		"id": "` + id + `",
-		"userData": "{}",
 		"localDescription": {
 			"type": "offer",
 			"sdp": ` + strconv.Quote(offer.SDP) + `
@@ -279,7 +256,7 @@ func sendAdditionalCandidates(w http.ResponseWriter, r *http.Request) {
 	id := strings.Split(r.URL.Path, "/")[4]
 	match, _ := regexp.MatchString("[0-9a-zA-Z]{20}", id)
 
-	if match == true {
+	if match == true && connections[id] != nil {
 		json, err := json.Marshal(connections[id].additionalCandidates)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
