@@ -158,7 +158,6 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
-		//3 = ICEConnectionStateConnected
 		if connectionState == 3 {
 			if _, ok := s.events["connected"]; ok {
 				s.events["connected"](*s.connections[id], "")
@@ -238,16 +237,6 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-
-	// Create channel that is blocked until ICE Gathering is complete
-	//gatherComplete := webrtc.GatheringCompletePromise(peerConnection)
-
-	// Block until ICE Gathering is complete, disabling trickle ICE
-	// we do this because we only can exchange one signaling message
-	// in a production application you should exchange ICE Candidates via OnICECandidate
-	//<-gatherComplete
-
-	//fmt.Println(*peerConnection.LocalDescription())
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
