@@ -16,9 +16,10 @@ import (
 )
 
 var api *webrtc.API
-var connections = make(map[string]*Client)
 
 type Client struct {
+	Id                   string
+	dataChannel          *webrtc.DataChannel
 	peerConnection       *webrtc.PeerConnection
 	additionalCandidates []webrtc.ICECandidateInit
 }
@@ -28,8 +29,15 @@ func (c *Client) AddCandidate(can webrtc.ICECandidateInit) []webrtc.ICECandidate
 	return c.additionalCandidates
 }
 
+func (c *Client) Emit(e string, msg string) {
+	c.dataChannel.SendText(`{"` + e + `":"` + msg + `"}`)
+}
+
 type Server struct {
-	Ordered bool
+	Ordered     bool
+	connections map[string]*Client
+	events      map[string]func(c Client, msg string)
+	//eventsLock sync.RWMutex
 }
 
 // Make the server listen on a specific port
@@ -44,6 +52,7 @@ func (s *Server) Listen(port int) error {
 	}
 
 	fmt.Printf("Gecgos.io signaling server is running on port at %d\n", port)
+	s.connections = make(map[string]*Client)
 
 	// Create a SettingEngine, this allows non-standard WebRTC behavior
 	settingEngine := webrtc.SettingEngine{}
@@ -65,11 +74,11 @@ func (s *Server) Listen(port int) error {
 	http.HandleFunc("/.wrtc/v2/connections/", func(w http.ResponseWriter, r *http.Request) {
 		page := r.URL.Path
 		if page == "/.wrtc/v2/connections/" {
-			createConnection(w, r)
+			s.createConnection(w, r)
 		} else if strings.Split(page, "/")[5] == "remote-description" {
-			setRemoteDescription(w, r)
+			s.setRemoteDescription(w, r)
 		} else if strings.Split(page, "/")[5] == "additional-candidates" {
-			sendAdditionalCandidates(w, r)
+			s.sendAdditionalCandidates(w, r)
 		} else {
 			fmt.Println(page)
 			w.WriteHeader(http.StatusNotFound)
@@ -83,9 +92,17 @@ func (s *Server) Listen(port int) error {
 	return err
 }
 
+func (s *Server) On(e string, f func(c Client, msg string)) {
+	if s.events == nil {
+		s.events = make(map[string]func(c Client, msg string))
+	}
+
+	s.events[e] = f
+}
+
 // This function will try to prepare a WebRTC connection by first offering the SDP challenge to the potential client
 // https://github.com/geckosio/geckos.io/blob/1d15c1ae8877b62f53fa026de2323c09202b07ab/packages/server/src/wrtc/connectionsManager.ts#L50
-func createConnection(w http.ResponseWriter, r *http.Request) {
+func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Client attempting to connect from: ", r.RemoteAddr)
 	id := xid.New().String()
 
@@ -95,7 +112,6 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	connections[id] = &Client{peerConnection, nil}
 
 	//Setup dataChannel to act like UDP with ordered messages (no retransmits)
 	//with the DataChannelInit struct
@@ -119,6 +135,8 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
+	s.connections[id] = &Client{id, dataChannel, peerConnection, nil}
+
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
@@ -127,7 +145,7 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 			fmt.Println(id + " connected!")
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
 			fmt.Println(id + " disconnected!")
-			delete(connections, id)
+			delete(s.connections, id)
 
 			err := peerConnection.Close() //deletes all references to this peerconnection in mem and same for ICE agent (ICE agent releases the "closed" status)
 			if err != nil {               //https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close
@@ -153,7 +171,7 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 		// }
 
 		fmt.Println("New ICE Candidate avaliable for " + id + ": " + c.ToJSON().Candidate)
-		connections[id].AddCandidate(c.ToJSON())
+		s.connections[id].AddCandidate(c.ToJSON())
 	})
 
 	// Register ordered channel opening handling
@@ -172,13 +190,28 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 		}
 	})
 
-	// Register text message handling
+	// Register message/event handling
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		fmt.Printf("Message from DataChannel '%s': '%s'\n", dataChannel.Label(), string(msg.Data))
+		m := map[string]string{}
+		err := json.Unmarshal(msg.Data, &m)
+		if err != nil {
+			fmt.Println(err.Error())
+			return
+		}
+
+		// this is probably not the best way to do this...
+		for event, data := range m {
+			if _, ok := s.events[event]; ok {
+				s.events[event](*s.connections[id], data)
+			} else {
+				fmt.Printf("Unknown event '%s' with data: '%s'\n", event, data)
+			}
+			return
+		}
 	})
 
 	// Create an offer to send to the browser
-	offer, err := connections[id].peerConnection.CreateOffer(nil)
+	offer, err := s.connections[id].peerConnection.CreateOffer(nil)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -217,7 +250,7 @@ func createConnection(w http.ResponseWriter, r *http.Request) {
 
 // This function will try to accept the SDP challenge from a potential client
 // https://github.com/geckosio/geckos.io/blob/6ad2535a8f26d6cce0e7af2c4cf7df311622b567/packages/server/src/httpServer/routes.ts#L38
-func setRemoteDescription(w http.ResponseWriter, r *http.Request) {
+func (s *Server) setRemoteDescription(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -242,7 +275,7 @@ func setRemoteDescription(w http.ResponseWriter, r *http.Request) {
 	answer := webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: data["sdp"].(string)}
 
 	// Set the remote SessionDescription
-	err = connections[id].peerConnection.SetRemoteDescription(answer)
+	err = s.connections[id].peerConnection.SetRemoteDescription(answer)
 	if err != nil {
 		fmt.Println(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
@@ -252,12 +285,12 @@ func setRemoteDescription(w http.ResponseWriter, r *http.Request) {
 
 // This function will send the client additional ice candidates to aid in connection
 // https://github.com/geckosio/geckos.io/blob/6ad2535a8f26d6cce0e7af2c4cf7df311622b567/packages/server/src/httpServer/routes.ts#L68
-func sendAdditionalCandidates(w http.ResponseWriter, r *http.Request) {
+func (s *Server) sendAdditionalCandidates(w http.ResponseWriter, r *http.Request) {
 	id := strings.Split(r.URL.Path, "/")[4]
 	match, _ := regexp.MatchString("[0-9a-zA-Z]{20}", id)
 
-	if match == true && connections[id] != nil {
-		json, err := json.Marshal(connections[id].additionalCandidates)
+	if match == true && s.connections[id] != nil {
+		json, err := json.Marshal(s.connections[id].additionalCandidates)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return

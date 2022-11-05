@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 
 	gecgosio "github.com/lulzsun/gecgos.io"
@@ -14,5 +15,14 @@ func main() {
 	server := gecgosio.Server{
 		Ordered: true,
 	}
+
+	// Example of sending and recieving from client(s)
+	// Server will recieve the event 'ping' with data 'hello'
+	// Server will send the event 'pong' with data 'world'
+	server.On("ping", func(c gecgosio.Client, msg string) {
+		fmt.Printf("Client %s sent event 'ping' with data '%s', emitting back 'pong'\n", c.Id, msg)
+		c.Emit("pong", "world")
+	})
+
 	server.Listen(420)
 }

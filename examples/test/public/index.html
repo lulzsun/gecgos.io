@@ -23,6 +23,15 @@
 
         console.log('connected')
         h2.innerText = 'Status: connected'
+
+        // Example of sending and recieving from server
+        // Client will send the event 'ping' with data 'hello'
+        // Client will recieve the event 'pong' with data 'world'
+        channel.on('pong', data => {
+          console.log(`Server sent event 'pong' with data '${data}'`)
+        })
+
+        channel.emit('ping', 'hello')
       })
     </script>
   </body>
