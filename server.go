@@ -100,6 +100,26 @@ func (s *Server) On(e string, f func(c Client, msg string)) {
 	s.events[e] = f
 }
 
+func (s *Server) OnConnect(f func(c Client)) {
+	if s.events == nil {
+		s.events = make(map[string]func(c Client, msg string))
+	}
+
+	s.events["connected"] = func(c Client, msg string) {
+		f(c)
+	}
+}
+
+func (s *Server) OnDisconnect(f func(c Client)) {
+	if s.events == nil {
+		s.events = make(map[string]func(c Client, msg string))
+	}
+
+	s.events["disconnected"] = func(c Client, msg string) {
+		f(c)
+	}
+}
+
 // This function will try to prepare a WebRTC connection by first offering the SDP challenge to the potential client
 // https://github.com/geckosio/geckos.io/blob/1d15c1ae8877b62f53fa026de2323c09202b07ab/packages/server/src/wrtc/connectionsManager.ts#L50
 func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
@@ -124,9 +144,7 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	//side that the message received from the server
 	//is the most recent update, and not have to
 	//implement logic for handling old messages
-	var ordered = true
-
-	udpPls.Ordered = &ordered
+	udpPls.Ordered = &s.Ordered
 	udpPls.MaxRetransmits = &retransmits
 
 	// Create a datachannel with label 'UDP' and options udpPls
@@ -142,17 +160,21 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		//3 = ICEConnectionStateConnected
 		if connectionState == 3 {
-			fmt.Println(id + " connected!")
+			if _, ok := s.events["connected"]; ok {
+				s.events["connected"](*s.connections[id], "")
+			}
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
-			fmt.Println(id + " disconnected!")
-			delete(s.connections, id)
+			if _, ok := s.connections[id]; ok {
+				if _, ok := s.events["disconnected"]; ok {
+					s.events["disconnected"](*s.connections[id], "")
+				}
+				delete(s.connections, id)
+			}
 
 			err := peerConnection.Close() //deletes all references to this peerconnection in mem and same for ICE agent (ICE agent releases the "closed" status)
 			if err != nil {               //https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close
 				fmt.Println(err)
 			}
-		} else {
-			fmt.Printf("ICE Connection State has changed: %s\n", connectionState.String())
 		}
 	})
 
@@ -164,13 +186,6 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		if c == nil {
 			return
 		}
-
-		// outbound, marshalErr := json.Marshal(c.ToJSON())
-		// if marshalErr != nil {
-		// 	panic(marshalErr)
-		// }
-
-		fmt.Println("New ICE Candidate avaliable for " + id + ": " + c.ToJSON().Candidate)
 		s.connections[id].AddCandidate(c.ToJSON())
 	})
 

@@ -16,6 +16,14 @@ func main() {
 		Ordered: true,
 	}
 
+	server.OnConnect(func(c gecgosio.Client) {
+		fmt.Printf("Client %s has connected!\n", c.Id)
+	})
+
+	server.OnDisconnect(func(c gecgosio.Client) {
+		fmt.Printf("Client %s has disconnected!\n", c.Id)
+	})
+
 	// Example of sending and recieving from client(s)
 	// Server will recieve the event 'ping' with data 'hello'
 	// Server will send the event 'pong' with data 'world'
