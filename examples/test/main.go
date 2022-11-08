@@ -14,6 +14,7 @@ func main() {
 
 	server := gecgosio.Server{
 		Ordered: true,
+		Cors:    gecgosio.Cors{Origin: "*"},
 	}
 
 	server.OnConnect(func(c gecgosio.Client) {

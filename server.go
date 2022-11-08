@@ -34,10 +34,16 @@ func (c *Client) Emit(e string, msg string) {
 }
 
 type Server struct {
-	Ordered     bool
+	Ordered bool
+	Cors
 	connections map[string]*Client
 	events      map[string]func(c Client, msg string)
 	//eventsLock sync.RWMutex
+}
+
+type Cors struct {
+	Origin string
+	//AllowAuthorization bool
 }
 
 // Make the server listen on a specific port
@@ -72,6 +78,10 @@ func (s *Server) Listen(port int) error {
 	// mimic geckos.io http routes
 	// https://github.com/geckosio/geckos.io/blob/6ad2535a8f26d6cce0e7af2c4cf7df311622b567/packages/server/src/httpServer/routes.ts
 	http.HandleFunc("/.wrtc/v2/connections/", func(w http.ResponseWriter, r *http.Request) {
+		if s.Cors.Origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", s.Cors.Origin)
+		}
+
 		page := r.URL.Path
 		if page == "/.wrtc/v2/connections/" {
 			s.createConnection(w, r)
