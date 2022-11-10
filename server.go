@@ -37,7 +37,7 @@ type Server struct {
 	Ordered bool
 	Cors
 	connections map[string]*Client
-	events      map[string]func(c Client, msg string)
+	events      map[string][]func(c Client, msg string)
 	//eventsLock sync.RWMutex
 }
 
@@ -104,30 +104,30 @@ func (s *Server) Listen(port int) error {
 
 func (s *Server) On(e string, f func(c Client, msg string)) {
 	if s.events == nil {
-		s.events = make(map[string]func(c Client, msg string))
+		s.events = make(map[string][]func(c Client, msg string))
 	}
 
-	s.events[e] = f
+	s.events[e] = append(s.events[e], f)
+}
+
+func (s *Server) Off(e string, f func(c Client, msg string)) {
+	if s.events == nil {
+		return
+	}
+
+	s.events[e] = append(s.events[e], f)
 }
 
 func (s *Server) OnConnect(f func(c Client)) {
-	if s.events == nil {
-		s.events = make(map[string]func(c Client, msg string))
-	}
-
-	s.events["connected"] = func(c Client, msg string) {
+	s.On("connected", func(c Client, msg string) {
 		f(c)
-	}
+	})
 }
 
 func (s *Server) OnDisconnect(f func(c Client)) {
-	if s.events == nil {
-		s.events = make(map[string]func(c Client, msg string))
-	}
-
-	s.events["disconnected"] = func(c Client, msg string) {
+	s.On("connected", func(c Client, msg string) {
 		f(c)
-	}
+	})
 }
 
 // This function will try to prepare a WebRTC connection by first offering the SDP challenge to the potential client
@@ -170,12 +170,16 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		if connectionState == 3 {
 			if _, ok := s.events["connected"]; ok {
-				s.events["connected"](*s.connections[id], "")
+				for _, evt := range s.events["connected"] {
+					evt(*s.connections[id], "")
+				}
 			}
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
 			if _, ok := s.connections[id]; ok {
 				if _, ok := s.events["disconnected"]; ok {
-					s.events["disconnected"](*s.connections[id], "")
+					for _, evt := range s.events["disconnected"] {
+						evt(*s.connections[id], "")
+					}
 				}
 				delete(s.connections, id)
 			}
@@ -226,7 +230,9 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		// this is probably not the best way to do this...
 		for event, data := range m {
 			if _, ok := s.events[event]; ok {
-				s.events[event](*s.connections[id], data)
+				for _, evt := range s.events[event] {
+					evt(*s.connections[id], data)
+				}
 			} else {
 				fmt.Printf("Unknown event '%s' with data: '%s'\n", event, data)
 			}
