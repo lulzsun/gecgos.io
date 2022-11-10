@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -110,12 +111,18 @@ func (s *Server) On(e string, f func(c Client, msg string)) {
 	s.events[e] = append(s.events[e], f)
 }
 
-func (s *Server) Off(e string, f func(c Client, msg string)) {
-	if s.events == nil {
-		return
+func (s *Server) Off(e string, f func(c Client, msg string)) bool {
+	if s.events != nil {
+		for i, evt := range s.events[e] {
+			if reflect.ValueOf(evt) == reflect.ValueOf(f) {
+				s.events[e][i] = s.events[e][len(s.events[e])-1]
+				s.events[e] = s.events[e][:len(s.events[e])-1]
+				return true
+			}
+		}
 	}
 
-	s.events[e] = append(s.events[e], f)
+	return false
 }
 
 func (s *Server) OnConnect(f func(c Client)) {
