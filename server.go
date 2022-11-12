@@ -6,11 +6,9 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/rs/xid"
@@ -23,6 +21,7 @@ type Client struct {
 	dataChannel          *webrtc.DataChannel
 	peerConnection       *webrtc.PeerConnection
 	additionalCandidates []webrtc.ICECandidateInit
+	IEventEmitter
 }
 
 func (c *Client) AddCandidate(can webrtc.ICECandidateInit) []webrtc.ICECandidateInit {
@@ -35,16 +34,32 @@ func (c *Client) Emit(e string, msg string) {
 }
 
 type Server struct {
+	Options
+	connections map[string]*Client
+	IEventEmitter
+}
+
+type Options struct {
 	Ordered bool
 	Cors
-	connections map[string]*Client
-	events      map[string][]func(c Client, msg string)
-	//eventsLock sync.RWMutex
 }
 
 type Cors struct {
 	Origin string
 	//AllowAuthorization bool
+}
+
+// Instantiate and return a new Gecgos server
+func Gecgos(opt *Options) *Server {
+	s := &Server{
+		IEventEmitter: CreateEventEmitter(),
+	}
+
+	if opt != nil {
+		s.Options = *opt
+	}
+
+	return s
 }
 
 // Make the server listen on a specific port
@@ -103,38 +118,12 @@ func (s *Server) Listen(port int) error {
 	return err
 }
 
-func (s *Server) On(e string, f func(c Client, msg string)) {
-	if s.events == nil {
-		s.events = make(map[string][]func(c Client, msg string))
-	}
-
-	s.events[e] = append(s.events[e], f)
-}
-
-func (s *Server) Off(e string, f func(c Client, msg string)) bool {
-	if s.events != nil {
-		for i, evt := range s.events[e] {
-			if reflect.ValueOf(evt) == reflect.ValueOf(f) {
-				s.events[e][i] = s.events[e][len(s.events[e])-1]
-				s.events[e] = s.events[e][:len(s.events[e])-1]
-				return true
-			}
-		}
-	}
-
-	return false
-}
-
-func (s *Server) OnConnect(f func(c Client)) {
-	s.On("connected", func(c Client, msg string) {
-		f(c)
-	})
+func (s *Server) OnConnection(f func(c Client)) {
+	s.On("connection", f)
 }
 
 func (s *Server) OnDisconnect(f func(c Client)) {
-	s.On("connected", func(c Client, msg string) {
-		f(c)
-	})
+	s.On("disconnection", f)
 }
 
 // This function will try to prepare a WebRTC connection by first offering the SDP challenge to the potential client
@@ -170,24 +159,16 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	s.connections[id] = &Client{id, dataChannel, peerConnection, nil}
+	s.connections[id] = &Client{id, dataChannel, peerConnection, nil, CreateEventEmitter()}
 
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		if connectionState == 3 {
-			if _, ok := s.events["connected"]; ok {
-				for _, evt := range s.events["connected"] {
-					evt(*s.connections[id], "")
-				}
-			}
+			s.Emit("connection", *s.connections[id])
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
 			if _, ok := s.connections[id]; ok {
-				if _, ok := s.events["disconnected"]; ok {
-					for _, evt := range s.events["disconnected"] {
-						evt(*s.connections[id], "")
-					}
-				}
+				s.Emit("disconnection", *s.connections[id])
 				delete(s.connections, id)
 			}
 
@@ -209,22 +190,6 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		s.connections[id].AddCandidate(c.ToJSON())
 	})
 
-	// Register ordered channel opening handling
-	dataChannel.OnOpen(func() {
-		for {
-			time.Sleep(time.Millisecond * 50) //50 milliseconds = 20 updates per second
-			//20 milliseconds = ~60 updates per second
-
-			//fmt.Println(UpdatesString)
-			// Send the message as text so we can JSON.parse in javascript
-			sendErr := dataChannel.SendText("hello")
-			if sendErr != nil {
-				fmt.Println("data send err", sendErr)
-				break
-			}
-		}
-	})
-
 	// Register message/event handling
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
 		m := map[string]string{}
@@ -234,16 +199,8 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// this is probably not the best way to do this...
 		for event, data := range m {
-			if _, ok := s.events[event]; ok {
-				for _, evt := range s.events[event] {
-					evt(*s.connections[id], data)
-				}
-			} else {
-				fmt.Printf("Unknown event '%s' with data: '%s'\n", event, data)
-			}
-			return
+			s.connections[id].IEventEmitter.Emit(event, data)
 		}
 	})
 

@@ -12,25 +12,22 @@ func main() {
 	http.FileServer(http.Dir("./public"))
 	http.Handle("/", fileServer)
 
-	server := gecgosio.Server{
-		Ordered: true,
-		Cors:    gecgosio.Cors{Origin: "*"},
-	}
+	server := gecgosio.Gecgos(nil)
 
-	server.OnConnect(func(c gecgosio.Client) {
+	server.OnConnection(func(c gecgosio.Client) {
 		fmt.Printf("Client %s has connected!\n", c.Id)
+
+		// Example of sending and recieving from client(s)
+		// Server will recieve the event 'ping' with data 'hello'
+		// Server will send the event 'pong' with data 'world'
+		c.On("ping", func(msg string) {
+			fmt.Printf("Client %s sent event 'ping' with data '%s', emitting back 'pong'\n", c.Id, msg)
+			c.Emit("pong", "world")
+		})
 	})
 
 	server.OnDisconnect(func(c gecgosio.Client) {
 		fmt.Printf("Client %s has disconnected!\n", c.Id)
-	})
-
-	// Example of sending and recieving from client(s)
-	// Server will recieve the event 'ping' with data 'hello'
-	// Server will send the event 'pong' with data 'world'
-	server.On("ping", func(c gecgosio.Client, msg string) {
-		fmt.Printf("Client %s sent event 'ping' with data '%s', emitting back 'pong'\n", c.Id, msg)
-		c.Emit("pong", "world")
 	})
 
 	server.Listen(420)
