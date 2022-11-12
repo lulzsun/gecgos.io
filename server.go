@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/pion/webrtc/v3"
-	"github.com/rs/xid"
 )
 
 var api *webrtc.API
@@ -113,7 +112,6 @@ func (s *Server) OnDisconnect(f func(c Peer)) {
 // https://github.com/geckosio/geckos.io/blob/1d15c1ae8877b62f53fa026de2323c09202b07ab/packages/server/src/wrtc/connectionsManager.ts#L50
 func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Client attempting to connect from: ", r.RemoteAddr)
-	id := xid.New().String()
 
 	// Create a new RTCPeerConnection
 	peerConnection, err := api.NewPeerConnection(webrtc.Configuration{})
@@ -142,23 +140,15 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	s.peerConnections[id] = &Peer{id, dataChannel, peerConnection, nil, CreateEventEmitter()}
+	peer := createPeer(s, dataChannel, peerConnection)
 
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		if connectionState == 3 {
-			s.Emit("connection", *s.peerConnections[id])
+			s.Emit("connection", *peer)
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
-			if _, ok := s.peerConnections[id]; ok {
-				s.Emit("disconnection", *s.peerConnections[id])
-				delete(s.peerConnections, id)
-			}
-
-			err := peerConnection.Close() //deletes all references to this peerconnection in mem and same for ICE agent (ICE agent releases the "closed" status)
-			if err != nil {               //https://www.w3.org/TR/webrtc/#dom-rtcpeerconnection-close
-				fmt.Println(err)
-			}
+			peer.Disconnect()
 		}
 	})
 
@@ -170,7 +160,7 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		if c == nil {
 			return
 		}
-		s.peerConnections[id].AddCandidate(c.ToJSON())
+		peer.AddCandidate(c.ToJSON())
 	})
 
 	// Register message/event handling
@@ -183,12 +173,12 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for event, data := range m {
-			s.peerConnections[id].IEventEmitter.Emit(event, data)
+			peer.IEventEmitter.Emit(event, data)
 		}
 	})
 
 	// Create an offer to send to the browser
-	offer, err := s.peerConnections[id].peerConnection.CreateOffer(nil)
+	offer, err := peer.peerConnection.CreateOffer(nil)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -206,7 +196,7 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 
 	json := []byte(`{
 		"userData": {},
-		"id": "` + id + `",
+		"id": "` + peer.Id + `",
 		"localDescription": {
 			"type": "offer",
 			"sdp": ` + strconv.Quote(offer.SDP) + `
