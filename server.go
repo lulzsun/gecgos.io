@@ -16,26 +16,9 @@ import (
 
 var api *webrtc.API
 
-type Client struct {
-	Id                   string
-	dataChannel          *webrtc.DataChannel
-	peerConnection       *webrtc.PeerConnection
-	additionalCandidates []webrtc.ICECandidateInit
-	IEventEmitter
-}
-
-func (c *Client) AddCandidate(can webrtc.ICECandidateInit) []webrtc.ICECandidateInit {
-	c.additionalCandidates = append(c.additionalCandidates, can)
-	return c.additionalCandidates
-}
-
-func (c *Client) Emit(e string, msg string) {
-	c.dataChannel.SendText(`{"` + e + `":"` + msg + `"}`)
-}
-
 type Server struct {
 	Options
-	connections map[string]*Client
+	peerConnections map[string]*Peer
 	IEventEmitter
 }
 
@@ -74,7 +57,7 @@ func (s *Server) Listen(port int) error {
 	}
 
 	fmt.Printf("Gecgos.io signaling server is running on port at %d\n", port)
-	s.connections = make(map[string]*Client)
+	s.peerConnections = make(map[string]*Peer)
 
 	// Create a SettingEngine, this allows non-standard WebRTC behavior
 	settingEngine := webrtc.SettingEngine{}
@@ -118,11 +101,11 @@ func (s *Server) Listen(port int) error {
 	return err
 }
 
-func (s *Server) OnConnection(f func(c Client)) {
+func (s *Server) OnConnection(f func(c Peer)) {
 	s.On("connection", f)
 }
 
-func (s *Server) OnDisconnect(f func(c Client)) {
+func (s *Server) OnDisconnect(f func(c Peer)) {
 	s.On("disconnection", f)
 }
 
@@ -159,17 +142,17 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 
-	s.connections[id] = &Client{id, dataChannel, peerConnection, nil, CreateEventEmitter()}
+	s.peerConnections[id] = &Peer{id, dataChannel, peerConnection, nil, CreateEventEmitter()}
 
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
 		if connectionState == 3 {
-			s.Emit("connection", *s.connections[id])
+			s.Emit("connection", *s.peerConnections[id])
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
-			if _, ok := s.connections[id]; ok {
-				s.Emit("disconnection", *s.connections[id])
-				delete(s.connections, id)
+			if _, ok := s.peerConnections[id]; ok {
+				s.Emit("disconnection", *s.peerConnections[id])
+				delete(s.peerConnections, id)
 			}
 
 			err := peerConnection.Close() //deletes all references to this peerconnection in mem and same for ICE agent (ICE agent releases the "closed" status)
@@ -187,7 +170,7 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		if c == nil {
 			return
 		}
-		s.connections[id].AddCandidate(c.ToJSON())
+		s.peerConnections[id].AddCandidate(c.ToJSON())
 	})
 
 	// Register message/event handling
@@ -200,12 +183,12 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for event, data := range m {
-			s.connections[id].IEventEmitter.Emit(event, data)
+			s.peerConnections[id].IEventEmitter.Emit(event, data)
 		}
 	})
 
 	// Create an offer to send to the browser
-	offer, err := s.connections[id].peerConnection.CreateOffer(nil)
+	offer, err := s.peerConnections[id].peerConnection.CreateOffer(nil)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -259,7 +242,7 @@ func (s *Server) setRemoteDescription(w http.ResponseWriter, r *http.Request) {
 	answer := webrtc.SessionDescription{Type: webrtc.SDPTypeAnswer, SDP: data["sdp"].(string)}
 
 	// Set the remote SessionDescription
-	err = s.connections[id].peerConnection.SetRemoteDescription(answer)
+	err = s.peerConnections[id].peerConnection.SetRemoteDescription(answer)
 	if err != nil {
 		fmt.Println(err.Error())
 		w.WriteHeader(http.StatusBadRequest)
@@ -273,8 +256,8 @@ func (s *Server) sendAdditionalCandidates(w http.ResponseWriter, r *http.Request
 	id := strings.Split(r.URL.Path, "/")[4]
 	match, _ := regexp.MatchString("[0-9a-zA-Z]{20}", id)
 
-	if match == true && s.connections[id] != nil {
-		json, err := json.Marshal(s.connections[id].additionalCandidates)
+	if match == true && s.peerConnections[id] != nil {
+		json, err := json.Marshal(s.peerConnections[id].additionalCandidates)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
