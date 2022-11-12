@@ -18,6 +18,7 @@ var api *webrtc.API
 type Server struct {
 	Options
 	peerConnections map[string]*Peer
+	rooms           map[string]Room
 	IEventEmitter
 }
 
@@ -34,6 +35,7 @@ type Cors struct {
 // Instantiate and return a new Gecgos server
 func Gecgos(opt *Options) *Server {
 	s := &Server{
+		rooms:         make(map[string]Room),
 		IEventEmitter: CreateEventEmitter(),
 	}
 
