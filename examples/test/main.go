@@ -22,6 +22,7 @@ func main() {
 		// Server will send the event 'pong' with data 'world'
 		peer.On("ping", func(msg string) {
 			fmt.Printf("Client %s sent event 'ping' with data '%s', emitting back 'pong'\n", peer.Id, msg)
+			// peer.Reliable(150, 10).Emit("pong", "world")
 			peer.Emit("pong", "world")
 		})
 	})

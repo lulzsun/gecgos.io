@@ -31,7 +31,11 @@
           console.log(`Server sent event 'pong' with data '${data}'`)
         })
 
-        channel.emit('ping', 'hello')
+        channel.emit('ping', 'hello', {
+          reliable: false,
+          interval: 150,
+          runs: 10,
+        })
       })
     </script>
   </body>

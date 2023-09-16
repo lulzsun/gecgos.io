@@ -11,6 +11,9 @@ import (
 type Peer struct {
 	Id                   string
 	rooms                map[string]bool
+	emitReliable         bool
+	interval             int
+	runs                 int
 	server               *Server
 	dataChannel          *webrtc.DataChannel
 	peerConnection       *webrtc.PeerConnection
@@ -38,7 +41,27 @@ func (p *Peer) AddCandidate(can webrtc.ICECandidateInit) []webrtc.ICECandidateIn
 	return p.additionalCandidates
 }
 
+// Will make the next Emit call to be reliable
+//
+// - interval: The interval between each message in ms
+//
+// - runs: How many times the message should be sent
+//
+// Example usage:
+//
+//	peer.Reliable(150, 10).Emit("ping", "hello") // reliable
+//	peer.Emit("pong", "world") // no longer reliable
+func (p *Peer) Reliable(interval int, runs int) *Peer {
+	p.emitReliable = true
+	p.interval = interval
+	p.runs = runs
+	return p
+}
+
 func (p *Peer) Emit(e string, msg string) {
+	if p.emitReliable == true {
+		p.emitReliable = false
+	}
 	p.dataChannel.SendText(`{"` + e + `":"` + msg + `"}`)
 }
 

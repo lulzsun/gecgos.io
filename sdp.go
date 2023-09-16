@@ -69,15 +69,31 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 
 	// Register message/event handling
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
-		m := map[string]string{}
-		err := json.Unmarshal(msg.Data, &m)
-		if err != nil {
+		var m map[string]interface{}
+		if err := json.Unmarshal(msg.Data, &m); err != nil {
 			fmt.Println(err.Error())
 			return
 		}
 
 		for event, data := range m {
-			peer.IEventEmitter.Emit(event, data)
+			switch data.(type) {
+			case string: // unreliable
+				peer.IEventEmitter.Emit(event, data)
+			default: // reliable(?)
+				reliableMsg := struct {
+					Id       string `json:"ID"`
+					Message  string `json:"MESSAGE"`
+					Reliable int    `json:"RELIABLE"`
+				}{}
+				d, _ := json.Marshal(data)
+				if err := json.Unmarshal(d, &reliableMsg); err == nil {
+					if reliableMsg.Reliable == 1 {
+						// do reliable stuff (keep a buffer)
+						//https://github.com/geckosio/geckos.io/blob/7cb3911c98e463e428ac42b1efcc5c1f552c94cf/packages/server/src/geckos/channel.ts
+					}
+					peer.IEventEmitter.Emit(event, reliableMsg.Message)
+				}
+			}
 		}
 	})
 
