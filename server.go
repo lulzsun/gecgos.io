@@ -25,8 +25,8 @@ type Options struct {
 }
 
 type Cors struct {
-	Origin string
-	//AllowAuthorization bool
+	Origin             string
+	AllowAuthorization bool
 }
 
 // Instantiate and return a new Gecgos server
@@ -76,7 +76,15 @@ func (s *Server) Listen(port int) error {
 		return func(w http.ResponseWriter, r *http.Request) {
 			if s.Cors.Origin != "" {
 				w.Header().Set("Access-Control-Allow-Origin", s.Cors.Origin)
-				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			}
+
+			w.Header().Set("Access-Control-Request-Method", "*")
+			w.Header().Set("Access-Control-Request-Headers", "X-Requested-With, Accept, Content-Type")
+			w.Header().Set("Access-Control-Allow-Methods", "OPTIONS, GET, POST")
+
+			if s.Cors.AllowAuthorization {
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			} else {
 				w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 			}
 
