@@ -14,7 +14,7 @@ import (
 
 // This function will try to prepare a WebRTC connection by first offering the SDP challenge to the potential client
 // https://github.com/geckosio/geckos.io/blob/1d15c1ae8877b62f53fa026de2323c09202b07ab/packages/server/src/wrtc/connectionsManager.ts#L50
-func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
+func (s *Server) CreateConnection(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Client attempting to connect from: ", r.RemoteAddr)
 
 	// Create a new RTCPeerConnection
@@ -136,7 +136,7 @@ func (s *Server) createConnection(w http.ResponseWriter, r *http.Request) {
 
 // This function will try to accept the SDP challenge from a potential client
 // https://github.com/geckosio/geckos.io/blob/6ad2535a8f26d6cce0e7af2c4cf7df311622b567/packages/server/src/httpServer/routes.ts#L38
-func (s *Server) setRemoteDescription(w http.ResponseWriter, r *http.Request) {
+func (s *Server) SetRemoteDescription(w http.ResponseWriter, r *http.Request) {
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -171,7 +171,7 @@ func (s *Server) setRemoteDescription(w http.ResponseWriter, r *http.Request) {
 
 // This function will send the client additional ice candidates to aid in connection
 // https://github.com/geckosio/geckos.io/blob/6ad2535a8f26d6cce0e7af2c4cf7df311622b567/packages/server/src/httpServer/routes.ts#L68
-func (s *Server) sendAdditionalCandidates(w http.ResponseWriter, r *http.Request) {
+func (s *Server) SendAdditionalCandidates(w http.ResponseWriter, r *http.Request) {
 	id := strings.Split(r.URL.Path, "/")[4]
 	match, _ := regexp.MatchString("[0-9a-zA-Z]{20}", id)
 

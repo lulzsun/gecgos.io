@@ -22,6 +22,7 @@ type Server struct {
 type Options struct {
 	Ordered bool
 	Cors
+	CustomHttpHandler bool
 }
 
 type Cors struct {
@@ -44,6 +45,8 @@ func Gecgos(opt *Options) *Server {
 }
 
 // Make the server listen on a specific port
+//
+// If CustomHttpHandler is true, Listen() will not be blocking
 func (s *Server) Listen(port int) error {
 	// Listen on UDP Port 80, will be used for all WebRTC traffic
 	udpListener, err := net.ListenUDP("udp", &net.UDPAddr{
@@ -54,7 +57,6 @@ func (s *Server) Listen(port int) error {
 		panic(err)
 	}
 
-	fmt.Printf("Gecgos.io signaling server is running on port at %d\n", port)
 	s.peerConnections = make(map[string]*Peer)
 
 	// Create a SettingEngine, this allows non-standard WebRTC behavior
@@ -71,6 +73,10 @@ func (s *Server) Listen(port int) error {
 
 	// Create a new API using our SettingEngine
 	api = webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine))
+
+	if s.Options.CustomHttpHandler {
+		return nil
+	}
 
 	corsHandler := func(h http.Handler) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +105,7 @@ func (s *Server) Listen(port int) error {
 	}
 
 	http.HandleFunc("/.wrtc/v2/connections", corsHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		s.createConnection(w, r)
+		s.CreateConnection(w, r)
 	})))
 
 	// mimic geckos.io http routes
@@ -107,11 +113,11 @@ func (s *Server) Listen(port int) error {
 	http.HandleFunc("/.wrtc/v2/connections/", corsHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		page := r.URL.Path
 		if page == "/.wrtc/v2/connections/" {
-			s.createConnection(w, r)
+			s.CreateConnection(w, r)
 		} else if strings.Split(page, "/")[5] == "remote-description" {
-			s.setRemoteDescription(w, r)
+			s.SetRemoteDescription(w, r)
 		} else if strings.Split(page, "/")[5] == "additional-candidates" {
-			s.sendAdditionalCandidates(w, r)
+			s.SendAdditionalCandidates(w, r)
 		} else {
 			fmt.Println(page)
 			w.WriteHeader(http.StatusNotFound)
