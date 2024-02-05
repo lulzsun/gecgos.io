@@ -85,24 +85,19 @@ func (s *Server) CreateConnection(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for event, data := range m {
-			switch data.(type) {
-			case string: // unreliable
-				peer.IEventEmitter.Emit(event, data)
-			default: // reliable(?)
-				reliableMsg := struct {
-					Id       string `json:"ID"`
-					Message  string `json:"MESSAGE"`
-					Reliable int    `json:"RELIABLE"`
-				}{}
-				d, _ := json.Marshal(data)
-				if err := json.Unmarshal(d, &reliableMsg); err == nil {
-					if reliableMsg.Reliable == 1 {
+			if dataJson, ok := data.(map[string]interface{}); ok {
+				if _, ok := dataJson["RELIABLE"].(float64); ok {
+					msg, _ := json.Marshal(dataJson["MESSAGE"])
+					if dataJson["RELIABLE"] == 1 {
 						// do reliable stuff (keep a buffer)
 						//https://github.com/geckosio/geckos.io/blob/7cb3911c98e463e428ac42b1efcc5c1f552c94cf/packages/server/src/geckos/channel.ts
 					}
-					peer.IEventEmitter.Emit(event, reliableMsg.Message)
+					peer.IEventEmitter.Emit(event, string(msg))
+					continue
 				}
 			}
+			msg, _ := json.Marshal(data)
+			peer.IEventEmitter.Emit(event, string(msg))
 		}
 	})
 
