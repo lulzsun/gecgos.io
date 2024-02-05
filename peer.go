@@ -88,8 +88,21 @@ func (p *Peer) Leave(ids ...string) {
 	}
 }
 
-func (p *Peer) To(roomIds ...string) Room {
+// Returns a list of peers given roomIds, including sender
+//
+// If no roomIds are given, returns all peers from all rooms
+// If the sender is not in a room, returns only sender
+func (p *Peer) Room(roomIds ...string) Room {
 	peers := Room{}
+	peers[p.Id] = p
+
+	if len(roomIds) == 0 {
+		roomIds = make([]string, 0, len(p.rooms))
+        for key := range p.rooms {
+            roomIds = append(roomIds, key)
+        }
+	}
+
 	for _, id := range roomIds {
 		if _, ok := p.server.rooms[id]; ok {
 			for _, p := range p.server.rooms[id] {
