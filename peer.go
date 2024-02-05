@@ -2,6 +2,7 @@ package gecgosio
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pion/webrtc/v3"
 	"github.com/rs/xid"
@@ -58,11 +59,24 @@ func (p *Peer) Reliable(interval int, runs int) *Peer {
 	return p
 }
 
-func (p *Peer) Emit(e string, msg string) {
+// Send a message to peer
+// 
+// - e: The event as a string
+//
+// - msg: The message as a string (optional)
+//
+// Example usage:
+//
+//	peer.Emit("x", "hello") // with message "hello"
+//	peer.Emit("y", "hello", "world") // with message "hello, world"
+//	peer.Emit("z") // with no message
+func (p *Peer) Emit(e string, msg ...string) {
+	data := strings.Join(msg, ", ")
+
 	if p.emitReliable == true {
 		p.emitReliable = false
 	}
-	p.dataChannel.SendText(`{"` + e + `":"` + msg + `"}`)
+	p.dataChannel.SendText(`{"` + e + `":"` + data + `"}`)
 }
 
 func (p *Peer) Join(ids ...string) {
