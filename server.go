@@ -21,8 +21,10 @@ type Server struct {
 
 type Options struct {
 	Ordered bool
+	// Only effective when using gecgos.io provided HTTP server
 	Cors
-	CustomHttpHandler bool
+	// Disables gecgos.io provided HTTP server
+	DisableHttpServer bool
 }
 
 type Cors struct {
@@ -46,7 +48,7 @@ func Gecgos(opt *Options) *Server {
 
 // Make the server listen on a specific port
 //
-// If CustomHttpHandler is true, Listen() will not be blocking
+// If DisableHttpHandler is true, Listen() will no longer be blocking
 func (s *Server) Listen(port int) error {
 	// Listen on UDP Port 80, will be used for all WebRTC traffic
 	udpListener, err := net.ListenUDP("udp", &net.UDPAddr{
@@ -74,7 +76,7 @@ func (s *Server) Listen(port int) error {
 	// Create a new API using our SettingEngine
 	api = webrtc.NewAPI(webrtc.WithSettingEngine(settingEngine))
 
-	if s.Options.CustomHttpHandler {
+	if s.Options.DisableHttpServer {
 		return nil
 	}
 
