@@ -138,5 +138,5 @@ func (s *Server) OnConnection(f func(c Peer)) {
 }
 
 func (s *Server) OnDisconnect(f func(c Peer)) {
-	s.On("disconnection", f)
+	s.On("disconnected", f)
 }

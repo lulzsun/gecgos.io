@@ -136,7 +136,15 @@ func (p *Peer) Room(roomIds ...string) Room {
 
 func (p *Peer) Disconnect() {
 	if p.server.peerConnections[p.Id] != nil {
-		p.server.Emit("disconnection", *p)
+		p.Emit("disconnected", "disconnected")
+		p.server.Emit("disconnected", *p)
+
+		rooms := make([]string, 0, len(p.rooms))
+		for room := range p.rooms {
+			rooms = append(rooms, room)
+		}
+
+		p.Leave(rooms...)
 		delete(p.server.peerConnections, p.Id)
 
 		err := p.peerConnection.Close() //deletes all references to this peerconnection in mem and same for ICE agent (ICE agent releases the "closed" status)
