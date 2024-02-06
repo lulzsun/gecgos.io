@@ -73,10 +73,17 @@ func (p *Peer) Reliable(interval int, runs int) *Peer {
 func (p *Peer) Emit(e string, msg ...string) {
 	data := strings.Join(msg, ", ")
 
-	if p.emitReliable == true {
+	startsWithCurly := strings.HasPrefix(data, "{")
+	endsWithCurly := strings.HasSuffix(data, "}")
+	jsonObjStr := startsWithCurly && endsWithCurly
+
+	if !jsonObjStr {
+		data = "\"" + data + "\""
+	}
+	if p.emitReliable {
 		p.emitReliable = false
 	}
-	p.dataChannel.SendText(`{"` + e + `":"` + data + `"}`)
+	p.dataChannel.SendText(`{"` + e + `":` + data + `}`)
 }
 
 func (p *Peer) Join(ids ...string) {
