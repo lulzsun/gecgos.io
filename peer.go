@@ -109,10 +109,11 @@ func (p *Peer) Leave(ids ...string) {
 	}
 }
 
-// Returns a list of peers given roomIds, including sender
+// Returns a list of peers given roomIds, including sender.
 //
-// If no roomIds are given, returns all peers from all rooms
-// If the sender is not in a room, returns only sender
+// If no roomIds are given, returns all peers from all rooms the sender is in.
+//
+// If the sender is not in a room, returns only sender.
 func (p *Peer) Room(roomIds ...string) Room {
 	peers := Room{}
 	peers[p.Id] = p
@@ -126,8 +127,35 @@ func (p *Peer) Room(roomIds ...string) Room {
 
 	for _, id := range roomIds {
 		if _, ok := p.server.rooms[id]; ok {
-			for _, p := range p.server.rooms[id] {
-				peers[p.Id] = p
+			for _, peer := range p.server.rooms[id] {
+				peers[peer.Id] = peer
+			}
+		}
+	}
+	return peers
+}
+
+// Returns a list of peers given roomIds, NOT including sender.
+//
+// If no roomIds are given, returns all peers from all rooms the sender is in.
+//
+// If the sender is not in a room, returns no peers.
+func (p *Peer) Broadcast(roomIds ...string) Broadcast {
+	peers := Broadcast{}
+
+	if len(roomIds) == 0 {
+		roomIds = make([]string, 0, len(p.rooms))
+        for key := range p.rooms {
+            roomIds = append(roomIds, key)
+        }
+	}
+
+	for _, id := range roomIds {
+		if _, ok := p.server.rooms[id]; ok {
+			for _, peer := range p.server.rooms[id] {
+				if p.Id != peer.Id {
+					peers[peer.Id] = peer
+				}
 			}
 		}
 	}
