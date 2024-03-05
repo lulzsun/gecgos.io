@@ -58,6 +58,10 @@ func (s *Server) CreateConnection(w http.ResponseWriter, r *http.Request) {
 	// Set the handler for ICE connection state
 	// This will notify you when the peer has connected/disconnected
 	peerConnection.OnICEConnectionStateChange(func(connectionState webrtc.ICEConnectionState) {
+		if peer == nil {
+			return
+		}
+
 		if connectionState == 3 {
 			s.Emit("connection", *peer)
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
@@ -70,7 +74,7 @@ func (s *Server) CreateConnection(w http.ResponseWriter, r *http.Request) {
 	// it as soon as it is ready. We don't wait to emit a Offer/Answer until they are
 	// all available
 	peerConnection.OnICECandidate(func(c *webrtc.ICECandidate) {
-		if c == nil {
+		if c == nil || peer == nil {
 			return
 		}
 		peer.AddCandidate(c.ToJSON())
@@ -78,6 +82,10 @@ func (s *Server) CreateConnection(w http.ResponseWriter, r *http.Request) {
 
 	// Register message/event handling
 	dataChannel.OnMessage(func(msg webrtc.DataChannelMessage) {
+		if peer == nil {
+			return
+		}
+
 		var m map[string]interface{}
 		if err := json.Unmarshal(msg.Data, &m); err != nil {
 			fmt.Println(err.Error())
