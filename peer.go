@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/pion/webrtc/v3"
+	"github.com/pion/webrtc/v4"
 	"github.com/rs/xid"
 )
 
@@ -60,7 +60,7 @@ func (p *Peer) Reliable(interval int, runs int) *Peer {
 }
 
 // Send a message to peer
-// 
+//
 // - e: The event as a string
 //
 // - msg: The message as a string (optional)
@@ -120,9 +120,9 @@ func (p *Peer) Room(roomIds ...string) Room {
 
 	if len(roomIds) == 0 {
 		roomIds = make([]string, 0, len(p.rooms))
-        for key := range p.rooms {
-            roomIds = append(roomIds, key)
-        }
+		for key := range p.rooms {
+			roomIds = append(roomIds, key)
+		}
 	}
 
 	for _, id := range roomIds {
@@ -145,9 +145,9 @@ func (p *Peer) Broadcast(roomIds ...string) Broadcast {
 
 	if len(roomIds) == 0 {
 		roomIds = make([]string, 0, len(p.rooms))
-        for key := range p.rooms {
-            roomIds = append(roomIds, key)
-        }
+		for key := range p.rooms {
+			roomIds = append(roomIds, key)
+		}
 	}
 
 	for _, id := range roomIds {
