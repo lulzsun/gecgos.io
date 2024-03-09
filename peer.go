@@ -165,7 +165,7 @@ func (p *Peer) Broadcast(roomIds ...string) Broadcast {
 func (p *Peer) Disconnect() {
 	if p.server.peerConnections[p.Id] != nil {
 		p.Emit("disconnected", "disconnected")
-		p.server.Emit("disconnected", *p)
+		p.server.Emit("disconnected", p)
 
 		rooms := make([]string, 0, len(p.rooms))
 		for room := range p.rooms {

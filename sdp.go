@@ -63,7 +63,7 @@ func (s *Server) CreateConnection(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if connectionState == 3 {
-			s.Emit("connection", *peer)
+			s.Emit("connection", peer)
 		} else if connectionState == 5 || connectionState == 6 || connectionState == 7 {
 			peer.Disconnect()
 		}

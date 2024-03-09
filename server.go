@@ -133,10 +133,10 @@ func (s *Server) Listen(port int) error {
 	return err
 }
 
-func (s *Server) OnConnection(f func(c Peer)) {
+func (s *Server) OnConnection(f func(c *Peer)) {
 	s.On("connection", f)
 }
 
-func (s *Server) OnDisconnect(f func(c Peer)) {
+func (s *Server) OnDisconnect(f func(c *Peer)) {
 	s.On("disconnected", f)
 }
