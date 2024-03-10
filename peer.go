@@ -38,6 +38,11 @@ func createPeer(s *Server, dc *webrtc.DataChannel, pc *webrtc.PeerConnection) *P
 }
 
 func (p *Peer) AddCandidate(can webrtc.ICECandidateInit) []webrtc.ICECandidateInit {
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to add candidate")
+		return []webrtc.ICECandidateInit{}
+	}
+
 	p.additionalCandidates = append(p.additionalCandidates, can)
 	return p.additionalCandidates
 }
@@ -53,6 +58,11 @@ func (p *Peer) AddCandidate(can webrtc.ICECandidateInit) []webrtc.ICECandidateIn
 //	peer.Reliable(150, 10).Emit("ping", "hello") // reliable
 //	peer.Emit("pong", "world") // no longer reliable
 func (p *Peer) Reliable(interval int, runs int) *Peer {
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to make reliable")
+		return nil
+	}
+
 	p.emitReliable = true
 	p.interval = interval
 	p.runs = runs
@@ -71,6 +81,11 @@ func (p *Peer) Reliable(interval int, runs int) *Peer {
 //	peer.Emit("y", "hello", "world") // with message "hello, world"
 //	peer.Emit("z") // with no message
 func (p *Peer) Emit(e string, msg ...string) {
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to emit")
+		return
+	}
+
 	data := strings.Join(msg, ", ")
 
 	startsWithCurly := strings.HasPrefix(data, "{")
@@ -83,10 +98,21 @@ func (p *Peer) Emit(e string, msg ...string) {
 	if p.emitReliable {
 		p.emitReliable = false
 	}
-	p.dataChannel.SendText(`{"` + e + `":` + data + `}`)
+
+	if p.dataChannel != nil {
+		p.dataChannel.SendText(`{"` + e + `":` + data + `}`)
+	} else {
+		fmt.Println("error: peer dataChannel is nil, deleting peer")
+		delete(p.server.peerConnections, p.Id)
+	}
 }
 
 func (p *Peer) Join(ids ...string) {
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to join")
+		return
+	}
+
 	for _, id := range ids {
 		if _, ok := p.server.rooms[id]; !ok {
 			p.server.rooms[id] = make(Room)
@@ -97,6 +123,11 @@ func (p *Peer) Join(ids ...string) {
 }
 
 func (p *Peer) Leave(ids ...string) {
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to leave")
+		return
+	}
+
 	for _, id := range ids {
 		if _, ok := p.server.rooms[id]; ok {
 			if _, ok := p.server.rooms[id][p.Id]; ok {
@@ -116,6 +147,12 @@ func (p *Peer) Leave(ids ...string) {
 // If the sender is not in a room, returns only sender.
 func (p *Peer) Room(roomIds ...string) Room {
 	peers := Room{}
+
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to set room")
+		return peers
+	}
+
 	peers[p.Id] = p
 
 	if len(roomIds) == 0 {
@@ -143,6 +180,11 @@ func (p *Peer) Room(roomIds ...string) Room {
 func (p *Peer) Broadcast(roomIds ...string) Broadcast {
 	peers := Broadcast{}
 
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to set broadcast")
+		return peers
+	}
+
 	if len(roomIds) == 0 {
 		roomIds = make([]string, 0, len(p.rooms))
 		for key := range p.rooms {
@@ -163,6 +205,11 @@ func (p *Peer) Broadcast(roomIds ...string) Broadcast {
 }
 
 func (p *Peer) Disconnect() {
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to disconnect")
+		return
+	}
+
 	if p.server.peerConnections[p.Id] != nil {
 		p.Emit("disconnected", "disconnected")
 		p.server.Emit("disconnected", p)
