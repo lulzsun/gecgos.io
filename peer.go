@@ -114,10 +114,10 @@ func (p *Peer) Join(ids ...string) {
 	}
 
 	for _, id := range ids {
-		if _, ok := p.server.rooms[id]; !ok {
-			p.server.rooms[id] = make(Room)
+		if _, ok := p.server.Rooms[id]; !ok {
+			p.server.Rooms[id] = make(Room)
 		}
-		p.server.rooms[id][p.Id] = p
+		p.server.Rooms[id][p.Id] = p
 		p.rooms[id] = true
 	}
 }
@@ -129,9 +129,13 @@ func (p *Peer) Leave(ids ...string) {
 	}
 
 	for _, id := range ids {
-		if _, ok := p.server.rooms[id]; ok {
-			if _, ok := p.server.rooms[id][p.Id]; ok {
-				delete(p.server.rooms[id], p.Id)
+		if _, ok := p.server.Rooms[id]; ok {
+			if _, ok := p.server.Rooms[id][p.Id]; ok {
+				delete(p.server.Rooms[id], p.Id)
+
+				if len(p.server.Rooms[id]) <= 0 {
+					delete(p.server.Rooms, id)
+				}
 			}
 			if _, ok := p.rooms[id]; ok {
 				delete(p.rooms, id)
@@ -163,8 +167,8 @@ func (p *Peer) Room(roomIds ...string) Room {
 	}
 
 	for _, id := range roomIds {
-		if _, ok := p.server.rooms[id]; ok {
-			for _, peer := range p.server.rooms[id] {
+		if _, ok := p.server.Rooms[id]; ok {
+			for _, peer := range p.server.Rooms[id] {
 				peers[peer.Id] = peer
 			}
 		}
@@ -193,8 +197,8 @@ func (p *Peer) Broadcast(roomIds ...string) Broadcast {
 	}
 
 	for _, id := range roomIds {
-		if _, ok := p.server.rooms[id]; ok {
-			for _, peer := range p.server.rooms[id] {
+		if _, ok := p.server.Rooms[id]; ok {
+			for _, peer := range p.server.Rooms[id] {
 				if p.Id != peer.Id {
 					peers[peer.Id] = peer
 				}
