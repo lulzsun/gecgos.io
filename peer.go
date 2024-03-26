@@ -144,6 +144,15 @@ func (p *Peer) Leave(ids ...string) {
 	}
 }
 
+// Returns a list of roomIds given a peer
+func (p *Peer) Rooms() []string {
+	rooms := []string{}
+	for room := range p.rooms {
+		rooms = append(rooms, room)
+	}
+	return rooms
+}
+
 // Returns a list of peers given roomIds, including sender.
 //
 // If no roomIds are given, returns all peers from all rooms the sender is in.
