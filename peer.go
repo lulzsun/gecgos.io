@@ -11,7 +11,7 @@ import (
 // The server's definition of a client
 type Peer struct {
 	Id                   string
-	rooms                map[string]bool
+	rooms                map[string]struct{}
 	emitReliable         bool
 	interval             int
 	runs                 int
@@ -25,7 +25,7 @@ type Peer struct {
 func createPeer(s *Server, dc *webrtc.DataChannel, pc *webrtc.PeerConnection) *Peer {
 	p := &Peer{
 		Id:                   xid.New().String(),
-		rooms:                make(map[string]bool),
+		rooms:                make(map[string]struct{}),
 		server:               s,
 		dataChannel:          dc,
 		peerConnection:       pc,
@@ -118,7 +118,7 @@ func (p *Peer) Join(ids ...string) {
 			p.server.Rooms[id] = make(Room)
 		}
 		p.server.Rooms[id][p.Id] = p
-		p.rooms[id] = true
+		p.rooms[id] = struct{}{}
 	}
 }
 
