@@ -27,6 +27,9 @@ type Options struct {
 	DisableHttpServer bool
 	// If defined, bind only to the given local address if it exists
 	BindAddress string
+	// Sets a list of external IP addresses of 1:1 (D)NAT and a candidate type for which the external IP address is used. 
+	// This is useful when you host a server using Pion on an AWS EC2 instance which has a private address, behind a 1:1 DNAT with a public IP (e.g. Elastic IP).
+	NAT1To1IPs []string
 }
 
 type Cors struct {
@@ -71,7 +74,7 @@ func (s *Server) Listen(port int) error {
 
 	//Our Public Candidate is declared here cause were not using a STUN server for discovery
 	//and just hardcoding the open port, and port forwarding webrtc traffic on the router
-	settingEngine.SetNAT1To1IPs([]string{}, webrtc.ICECandidateTypeHost)
+	settingEngine.SetNAT1To1IPs(s.NAT1To1IPs, webrtc.ICECandidateTypeHost)
 
 	// Configure our SettingEngine to use our UDPMux. By default a PeerConnection has
 	// no global state. The API+SettingEngine allows the user to share state between them.
