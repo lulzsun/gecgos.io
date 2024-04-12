@@ -25,6 +25,8 @@ type Options struct {
 	Cors
 	// Disables gecgos.io provided HTTP server
 	DisableHttpServer bool
+	// If defined, bind only to the given local address if it exists
+	BindAddress string
 }
 
 type Cors struct {
@@ -43,6 +45,11 @@ func Gecgos(opt *Options) *Server {
 		s.Options = *opt
 	}
 
+	if i, err := net.ResolveIPAddr("ip4", s.Options.BindAddress); err == nil {
+		fmt.Println("Resolved IP address from BindAddress:", i.IP)
+		s.BindAddress = i.IP.String()
+	}
+
 	return s
 }
 
@@ -50,9 +57,9 @@ func Gecgos(opt *Options) *Server {
 //
 // If DisableHttpHandler is true, Listen() will no longer be blocking
 func (s *Server) Listen(port int) error {
-	// Listen on UDP Port 80, will be used for all WebRTC traffic
+	// Listen on defined bind address and port, will be used for all WebRTC traffic
 	udpListener, err := net.ListenUDP("udp", &net.UDPAddr{
-		IP:   net.IP{0, 0, 0, 0},
+		IP:   net.ParseIP(s.BindAddress),
 		Port: port,
 	})
 	if err != nil {
