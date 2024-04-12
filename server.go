@@ -45,9 +45,10 @@ func Gecgos(opt *Options) *Server {
 		s.Options = *opt
 	}
 
-	if i, err := net.ResolveIPAddr("ip4", s.Options.BindAddress); err == nil {
+	if i, err := net.ResolveIPAddr("ip4", s.BindAddress); err == nil {
 		fmt.Println("Resolved IP address from BindAddress:", i.IP)
-		s.BindAddress = i.IP.String()
+	} else {
+		s.BindAddress = "0.0.0.0"
 	}
 
 	return s
@@ -58,10 +59,7 @@ func Gecgos(opt *Options) *Server {
 // If DisableHttpHandler is true, Listen() will no longer be blocking
 func (s *Server) Listen(port int) error {
 	// Listen on defined bind address and port, will be used for all WebRTC traffic
-	udpListener, err := net.ListenUDP("udp", &net.UDPAddr{
-		IP:   net.ParseIP(s.BindAddress),
-		Port: port,
-	})
+	udpListener, err := net.ListenPacket("udp4", fmt.Sprintf("%s:%d", s.BindAddress, port))
 	if err != nil {
 		panic(err)
 	}
