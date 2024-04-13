@@ -15,8 +15,6 @@ import (
 // This function will try to prepare a WebRTC connection by first offering the SDP challenge to the potential client
 // https://github.com/geckosio/geckos.io/blob/1d15c1ae8877b62f53fa026de2323c09202b07ab/packages/server/src/wrtc/connectionsManager.ts#L50
 func (s *Server) CreateConnection(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("Client attempting to connect from: ", r.RemoteAddr)
-
 	// Create a new RTCPeerConnection
 	peerConnection, err := api.NewPeerConnection(webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
