@@ -273,3 +273,7 @@ func (p *Peer) Disconnect() {
 		}
 	}
 }
+
+func (p *Peer) OnRaw(f func([]byte)) {
+	p.On("rawMessage", f)
+}

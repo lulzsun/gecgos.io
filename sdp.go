@@ -85,8 +85,9 @@ func (s *Server) CreateConnection(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var m map[string]interface{}
+		// if err, these are probably just raw bytes
 		if err := json.Unmarshal(msg.Data, &m); err != nil {
-			fmt.Println(err.Error())
+			peer.IEventEmitter.Emit("rawMessage", msg.Data)
 			return
 		}
 
