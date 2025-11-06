@@ -13,6 +13,7 @@ type Peer struct {
 	Id                   string
 	rooms                map[string]struct{}
 	emitReliable         bool
+	emitRaw              bool
 	interval             int
 	runs                 int
 	server               *Server
@@ -66,6 +67,22 @@ func (p *Peer) Reliable(interval int, runs int) *Peer {
 	p.emitReliable = true
 	p.interval = interval
 	p.runs = runs
+
+	return p
+}
+
+// Will make the next emit call be able to send raw bytes
+//
+// Example usage:
+//
+//	peer.Raw().Emit(...) 
+func (p *Peer) Raw() *Peer {
+	if p == nil {
+		fmt.Println("warning: peer is nil when trying to make reliable")
+		return nil
+	}
+
+	p.emitRaw = true
 	return p
 }
 
@@ -80,27 +97,42 @@ func (p *Peer) Reliable(interval int, runs int) *Peer {
 //	peer.Emit("x", "hello") // with message "hello"
 //	peer.Emit("y", "hello", "world") // with message "hello, world"
 //	peer.Emit("z") // with no message
-func (p *Peer) Emit(e string, msg ...string) {
+func (p *Peer) Emit(data any, msg ...string) {
 	if p == nil {
 		fmt.Println("warning: peer is nil when trying to emit")
 		return
 	}
+	if p.dataChannel == nil {
+		fmt.Println("error: peer dataChannel is nil, deleting peer")
+		delete(p.server.peerConnections, p.Id)
+		return
+	}
 
-	data := strings.Join(msg, ", ")
+    // Handle raw bytes
+	if bytes, ok := data.([]byte); ok {
+		p.dataChannel.Send(bytes)
+		return 
+	}
 
-	startsWithCurly := strings.HasPrefix(data, "{")
-	endsWithCurly := strings.HasSuffix(data, "}")
+	// Handle string event
+	e, ok := data.(string)
+	if !ok {
+		fmt.Println("first argument must be string or []byte")
+		return 
+	}
+
+	msgData := strings.Join(msg, ", ")
+	startsWithCurly := strings.HasPrefix(msgData, "{")
+	endsWithCurly := strings.HasSuffix(msgData, "}")
 	jsonObjStr := startsWithCurly && endsWithCurly
-
 	if !jsonObjStr {
-		data = "\"" + data + "\""
+		msgData = "\"" + msgData + "\""
 	}
 	if p.emitReliable {
 		p.emitReliable = false
 	}
-
 	if p.dataChannel != nil {
-		p.dataChannel.SendText(`{"` + e + `":` + data + `}`)
+		p.dataChannel.SendText(`{"` + e + `":` + msgData + `}`)
 	} else {
 		fmt.Println("error: peer dataChannel is nil, deleting peer")
 		delete(p.server.peerConnections, p.Id)
