@@ -75,7 +75,7 @@ func (p *Peer) Reliable(interval int, runs int) *Peer {
 //
 // Example usage:
 //
-//	peer.Raw().Emit(...) 
+//	peer.Raw().Emit(...)
 func (p *Peer) Raw() *Peer {
 	if p == nil {
 		fmt.Println("warning: peer is nil when trying to make reliable")
@@ -108,17 +108,17 @@ func (p *Peer) Emit(data any, msg ...string) {
 		return
 	}
 
-    // Handle raw bytes
+	// Handle raw bytes
 	if bytes, ok := data.([]byte); ok {
 		p.dataChannel.Send(bytes)
-		return 
+		return
 	}
 
 	// Handle string event
 	e, ok := data.(string)
 	if !ok {
 		fmt.Println("first argument must be string or []byte")
-		return 
+		return
 	}
 
 	msgData := strings.Join(msg, ", ")

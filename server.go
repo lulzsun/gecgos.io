@@ -27,7 +27,7 @@ type Options struct {
 	DisableHttpServer bool
 	// If defined, bind only to the given local address if it exists
 	BindAddress string
-	// Sets a list of external IP addresses of 1:1 (D)NAT and a candidate type for which the external IP address is used. 
+	// Sets a list of external IP addresses of 1:1 (D)NAT and a candidate type for which the external IP address is used.
 	// This is useful when you host a server using Pion on an AWS EC2 instance which has a private address, behind a 1:1 DNAT with a public IP (e.g. Elastic IP).
 	NAT1To1IPs []string
 }
